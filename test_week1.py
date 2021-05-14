@@ -86,7 +86,7 @@ class TestCOVID19_vaccine(unittest.TestCase):
                                    DBname=os.getenv("DBName"),
                                    UserId=os.getenv("UserID"),
                                    Password=os.getenv("Password")) as sqlClient:
-            dbcursor = sqlClient.cursor(as_dict=True)S
+            dbcursor = sqlClient.cursor(as_dict=True)
             # Setting inventory to zero
             sqltext = "UPDATE Vaccines SET inventory=%s WHERE vaccineid=1"
             cursor.execute(sqltext, 0)
