@@ -10,21 +10,21 @@ GO
 
 
 --- Drop commands to restructure the DB
--- Drop Table VaccineAppointments
--- Drop Table Vaccines
--- Drop Table Patients
--- Drop Table CareGiverSchedule
--- Drop Table AppointmentStatusCodes
--- Drop Table PatientAppointmentStatusCodes
--- Drop Table Caregivers
+-- Drop Table VaccineAppointments;
+-- Drop Table Vaccines;
+-- Drop Table Patients;
+-- Drop Table CareGiverSchedule;
+-- Drop Table AppointmentStatusCodes;
+-- Drop Table PatientAppointmentStatusCodes;
+-- Drop Table Caregivers;
 -- Go
 
 -- - Commands to clear the active database Tables for unit testing
--- Truncate Table VaccineAppointments
--- Truncate Table Vaccines
--- Truncate Table CareGiverSchedule
--- Delete From Patients
--- Delete From Caregivers
+-- Truncate Table VaccineAppointments;
+-- Truncate Table Vaccines;
+-- Truncate Table CareGiverSchedule;
+-- Delete From Patients;
+-- Delete From Caregivers;
 
 
 -- GO
@@ -116,7 +116,9 @@ CREATE PROCEDURE InitScheduerApp
 
 	Create Table VaccineAppointments(
 			VaccineAppointmentId int Identity PRIMARY Key, 
-			VaccineName varchar(50) ,
+			VaccineName varchar(50) 
+				CONSTRAINT FK_VaccineName FOREIGN KEY (VaccineName)
+				REFERENCES Vaccines(VaccineName),
 			PatientId int
 				CONSTRAINT FK_VaccineAppointmentPatientID FOREIGN KEY (PatientId)
 				REFERENCES Patients(PatientId),

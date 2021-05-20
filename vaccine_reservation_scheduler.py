@@ -9,7 +9,7 @@ from vaccine_caregiver import VaccineCaregiver
 from enums import *
 from utils import *
 from COVID19_vaccine import COVID19Vaccine as covid
-# from vaccine_patient import VaccinePatient as patient
+from vaccine_patient import VaccinePatient as patient
 
 
 class VaccineReservationScheduler:
@@ -17,7 +17,7 @@ class VaccineReservationScheduler:
     def __init__(self):
         return
 
-    def PutHoldOnAppointmentSlot(self, cursor):
+    def PutHoldOnAppointmentSlot(self, cursor, Date, TimeLower, TimeUpper):
         ''' Method that reserves a CareGiver appointment slot &
         returns the unique scheduling slotid
         Should return 0 if no slot is available  or -1 if there is a database error'''
@@ -30,10 +30,9 @@ class VaccineReservationScheduler:
             # Setting inventory to zero
             self.sqltext = "SELECT TOP 1 CaregiverSlotSchedulingId FROM CareGiverSchedule WHERE WorkDay=%s AND  SlotTime BETWEEN  %$ AND %s ORDER BY SlotTime ASC"
             try:
-                dbcursor.execute(self.sqltext, Date, TimeLower, TimeUpper)
+                dbcursor.execute(self.sqltext, ((Date), (TimeLower), (TimeUpper)))
                 rows = dbcursor.fetchone()
                 slot_id = rows['CaregiverSlotSchedulingId']
-                cursor.connection.commit()
 
                 # No appointments available
                 if slot_id is None:
@@ -43,6 +42,7 @@ class VaccineReservationScheduler:
                 self.updateCaregiverSQL = "UPDATE CareGiverSchedule SET SlotStatus=1 WHERE CaregiverSlotSchedulingId=%s"
                 cursor.execute(self.updateCaregiverSQL, (str(slotid)))
 
+                cursor.connection.commit()
                 return slot_id
             
             except pymssql.Error as db_err:
@@ -69,19 +69,27 @@ class VaccineReservationScheduler:
         if slotid < 1:
             return -2
         self.slotSchedulingId = slotid
-        self.updateAppointmentSQL = "UPDATE VaccineAppointment SET SlotStatus=SlotStatus+1 WHERE VaccineAppointmentId=%s"
-        self.getPatientId = "SELECT PatientId FROM VaccineAppointment WHERE VaccineAppointmentId=%s"
+        self.getSlotStatuses = "SELECT VA.PatientId as PatientId, VA.SlotStatus as VASlotStatus, CGS.SlotStatus as CGSSlotStatus, P.VaccineStatus as PVaccineStatus FROM VaccineAppointments as VA, CareGiverSchedule as CGS, Patients as P WHERE VA.VaccineAppointmentId=%s AND CGS.VaccineAppointmentId=%s AND P.PatientId = VA.PatientId"
+        self.updateAppointmentSQL = "UPDATE VaccineAppointments SET SlotStatus=SlotStatus+1 WHERE VaccineAppointmentId=%s"
         self.updatePatientsSQL = "UPDATE Patients SET VaccineStatus=VaccineStatus+1 WHERE PatientId=%s"
         self.updateCaregiverSQL = "UPDATE CareGiverSchedule SET SlotStatus=SlotStatus+1 WHERE VaccineAppointmentId=%s"
         try:
-            cursor.execute(self.getAppointmentSQL, (str(slotid)))
-            cursor.execute(self.getPatientId)
+            cursor.execute(self.getSlotStatuses, (str(slotid), (str(slotid))))
             row = cursor.fetchone()
             patientid = row['PatientId']
-            cursor.execute(self.updatePatientsSQL, (str(patientid)))
-            cursor.execute(self.updateCaregiverSQL, (str(slotid)))
-            cursor.connection.commit()
-            return self.slotSchedulingId
+            vaslotstatus = row['VASlotStatus']
+            cgsslotstatus = row['CGSSlotStatus']
+            pslotstatus = row['PVaccineStatus']
+            if vaslotstatus == 1 and cgsslotstatus == 1 and (pslotstatus==1 or pslotstatus==4):
+                cursor.execute(self.updateAppointmentSQL, (str(slotid)))
+                cursor.execute(self.getPatientId, (str(slotid)))
+                cursor.execute(self.updatePatientsSQL, (str(patientid)))
+                cursor.execute(self.updateCaregiverSQL, (str(slotid)))
+                cursor.connection.commit()
+                print('Sucessfully scheduled slotid.')
+                return self.slotSchedulingId
+            else:
+                raise Exception('One slot status was not marked as reserved.')
         except pymssql.Error as db_err:
             cursor.connection.rollback()    
             print("Database Programming Error in SQL Query processing! ")
@@ -111,11 +119,12 @@ if __name__ == '__main__':
             #     caregivers[cgid] = cg
 
             # Add a vaccine and Add doses to inventory of the vaccine
-            vaccines = {'Moderna': {'Supplier': 'Moderna', 'inventory': 100, 'shotsnecessary': 2, 'DaysBetweenDosesLower': 21, 'DaysBetweenDosesUpper': 28}, 'Pfizer': {'Supplier': 'Pfizer', 'inventory': 100, 'shotsnecessary': 2, 'DaysBetweenDosesLower': 21, 'DaysBetweenDosesUpper': 28}, 'JohnsonJohnson': {'Supplier': 'JJ', 'inventory': 100, 'shotsnecessary': 1, 'DaysBetweenDosesLower': 21, 'DaysBetweenDosesUpper': 28}}
-            vaccinedb = covid(dbcursor, vaccines)
+            #vaccines = {'Moderna': {'Supplier': 'Moderna', 'inventory': 100, 'shotsnecessary': 2, 'DaysBetweenDosesLower': 21, 'DaysBetweenDosesUpper': 28}, 'Pfizer': {'Supplier': 'Pfizer', 'inventory': 100, 'shotsnecessary': 2, 'DaysBetweenDosesLower': 21, 'DaysBetweenDosesUpper': 28}, 'JohnsonJohnson': {'Supplier': 'JJ', 'inventory': 100, 'shotsnecessary': 1, 'DaysBetweenDosesLower': 21, 'DaysBetweenDosesUpper': 28}}
+            #vaccinedb = covid(dbcursor, vaccines)
             # Ass patients
             # Schedule the patients
-            covid.AddDoses(dbcursor, 'Moderna', 30)
+            #covid.AddDoses(dbcursor, 'Moderna', 30)
+            vrs.ScheduleAppointmentSlot(1, dbcursor)
             # Test cases done!
             #covid.ReserveDoses(dbcursor, 2)
             # clear_tables(sqlClient)

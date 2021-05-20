@@ -10,8 +10,8 @@ class COVID19Vaccine:
         vaccine_dayslower = [x['DaysBetweenDosesLower'] for x in vaccine_inv]
         vaccine_daysupper = [x['DaysBetweenDosesUpper'] for x in vaccine_inv]
 
-        def __init__():
-            return None
+        def __init__(self, cursor):
+            self.cursor = cursor
 
         try:
             for i in range(len(vaccine_names)):
