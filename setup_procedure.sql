@@ -1,14 +1,3 @@
-Use DATA514DB
-GO
-
-InitScheduerApp
-
-
-IF OBJECT_ID ( 'InitScheduerApp', 'P' ) IS NOT NULL
-    DROP PROCEDURE InitScheduerApp;
-GO  
-
-
 --- Drop commands to restructure the DB
 -- Drop Table VaccineAppointments;
 -- Drop Table Vaccines;
@@ -17,6 +6,7 @@ GO
 -- Drop Table AppointmentStatusCodes;
 -- Drop Table PatientAppointmentStatusCodes;
 -- Drop Table Caregivers;
+-- Drop Procedure InitScheduerApp;
 -- Go
 
 -- - Commands to clear the active database Tables for unit testing
@@ -135,5 +125,3 @@ CREATE PROCEDURE InitScheduerApp
 			DateAdministered datetime,
 			DoseNumber int
 	);
-
-EXECUTE InitDataModel;
