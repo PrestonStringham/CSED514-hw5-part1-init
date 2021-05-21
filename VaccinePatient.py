@@ -34,7 +34,7 @@ class VaccinePatient:
 		if vaccinestatus == 7:
 			raise Exception('Patient is fully vaccinated.')
 		
-		if vaccinestatus >= 3: # check if 1s dose already administered
+		if vaccinestatus >= 2: # check if 1s dose already scheduled
 			dose_number = 2
 			new_vaccinestatus = 4 # (4, 'Queued for 2nd Dose')
 		else:
@@ -63,7 +63,7 @@ class VaccinePatient:
 		appointment_id = row_appointment['VaccineAppointmentId']
 		return appointment_id
 
-	def ScheduleAppointment(read_cursor, action_cursor, slotid, vaccineappointmentid):
+	def ScheduleAppointment(self, read_cursor, action_cursor, slotid, vaccineappointmentid):
 		'''
 		Insert vaccineappointmentid into caregiver schedule
 		Reserve doses
@@ -77,7 +77,6 @@ class VaccinePatient:
 			read_cursor.execute(getPatientId, (vaccineappointmentid))
 			row = read_cursor.fetchone()
 			patientid = row['PatientId']
-			print('patientid: ', patientid)
 			action_cursor.execute(updatePatientStatus, (patientid))
 			covid.ReserveDoses(read_cursor, action_cursor, vaccineappointmentid)
 			print('Patient successfully scheduled.')

@@ -125,3 +125,6 @@ CREATE PROCEDURE InitScheduerApp
 			DateAdministered datetime,
 			DoseNumber int
 	);
+--GO
+
+--EXEC InitScheduerApp;

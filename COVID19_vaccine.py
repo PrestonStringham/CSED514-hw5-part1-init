@@ -40,13 +40,12 @@ class COVID19Vaccine:
             read_cursor.execute(sqltext, (VaccineAppointmentId))
             row = read_cursor.fetchone()
             current_inventory = row['inventory']
-            print(current_inventory)
             shots_necessary = row['shotsnecessary']
-            print(shots_necessary)
             is_first_shot = row['DoseNumber']
             current_reserved = row['reserved'] 
             vaccineid = row['vaccinename']
-
+            if is_first_shot == 2:
+                return None
             if shots_necessary > current_inventory: 
                 raise Exception( "Not enough vaccines. Please try a different vaccine or another vaccine!")
             else:
@@ -54,7 +53,7 @@ class COVID19Vaccine:
                 if is_first_shot==1: 
                     action_cursor.execute(sqltext, ((current_inventory - shots_necessary), (current_reserved + shots_necessary), (vaccineid)))
                     new_reserved = current_reserved + shots_necessary
-                    print("Successfully reserved %s doses from vaccineid %s. Current reserved doses: %s", shots_necessary, vaccineid, new_reserved)
+                    print("Successfully reserved doses.")
         except pymssql.Error as db_err:
             print("ERROR: Could not reserve new doses. Pymssql error: " + db_err.args[1])
         return None

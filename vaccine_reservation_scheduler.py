@@ -9,7 +9,7 @@ from vaccine_caregiver import VaccineCaregiver
 from enums import *
 from utils import *
 from COVID19_vaccine import COVID19Vaccine as covid
-from VaccinePatient import VaccinePatient as patient
+from VaccinePatient import VaccinePatient as pat
 
 
 class VaccineReservationScheduler:
@@ -17,18 +17,19 @@ class VaccineReservationScheduler:
     def __init__(self):
         return
     
-    def ScheduleProcess (self, read_cursor, action_cursor, PatientId, Date, DateUpper='99-99-9999', Vaccine='Pfizer', TimeLower='00:00:00', TimeUpper='23:59:59'):
+    def ScheduleProcess(self, read_cursor, action_cursor, PatientId, Date, DateUpper='99-99-9999', Vaccine='Pfizer', TimeLower='00:00:00', TimeUpper='23:59:59'):
         '''
         Full process for scheduling a vaccine appointment. 
         '''
         # put hold on slot of Caregiver Scheduler  
-        slotid = self.PutHoldOnAppointmentSlot(self, read_cursor, action_cursor, Date, DateUpper, TimeLower, TimeUpper) 
+        slotid = self.PutHoldOnAppointmentSlot(read_cursor, action_cursor, Date, DateUpper, TimeLower, TimeUpper) 
+        patient = pat()
         #check for invalid output 0, -1 or -2  
         if slotid <= 0:
-            raise Exception('Error finding slot in Caregiver Schedule'.)
+            raise Exception('Error finding slot in Caregiver Schedule.')
         
-        # creates vaccine appointment
-        vaccineappointmentid = patient.ReserveAppointment(self, first_slotid, Vaccine, PatientId, read_cursor, action_cursor)
+        # creates vaccine appointment def ReserveAppointment(self, CaregiverSlotSchedulingId, Vaccine, PatientId, read_cursor, action_cursor):
+        vaccineappointmentid = patient.ReserveAppointment(slotid, Vaccine, PatientId, read_cursor, action_cursor)
         
         # change status to scheduled
         scheduleslot = self.ScheduleAppointmentSlot(vaccineappointmentid, slotid, read_cursor, action_cursor)
@@ -45,21 +46,21 @@ class VaccineReservationScheduler:
         Reserves appointment(s) for patient.
         '''
         # schedule first appointment
-        self.ScheduleProcess (self, read_cursor, action_cursor, PatientId, Date, DateUpper, Vaccine, TimeLower, TimeUpper)
+        self.ScheduleProcess(read_cursor, action_cursor, PatientId, Date, DateUpper, Vaccine, TimeLower, TimeUpper)
         
         # get vaccine number of doses and TimeBetweenLower/TimeBetweenUpper
-        getVaccineInfo= 'SELECT * FROM Vaccines WHERE VaccineName=%s'
+        getVaccineInfo = 'SELECT * FROM Vaccines WHERE VaccineName=%s'
         read_cursor.execute(getVaccineInfo, Vaccine)
-		row = read_cursor.fetchone()
-		number_doses = row['DosesPerPatient']
+        row = read_cursor.fetchone()
+        number_doses = row['DosesPerPatient']
         BetweenLower = row['DaysBetweenDosesLower']
         BetweenUpper = row['DaysBetweenDosesUpper']
 
         # check if needs 2nd appointment
         if number_doses == 2:
             NewDate = (datetime.datetime.strptime(Date, '%m-%d-%Y') + datetime.timedelta(days=BetweenLower)).strftime('%m-%d-%Y')
-            NewDateUpper = datetime.datetime.strptime(Date, '%m-%d-%Y') + datetime.timedelta(days=BetweenUpper).strftime('%m-%d-%Y')
-            self.ScheduleProcess (self, read_cursor, action_cursor, PatientId, NewDate, NewDateUpper, Vaccine, TimeLower, TimeUpper)
+            NewDateUpper = (datetime.datetime.strptime(Date, '%m-%d-%Y') + datetime.timedelta(days=BetweenUpper)).strftime('%m-%d-%Y')
+            self.ScheduleProcess (read_cursor, action_cursor, PatientId, NewDate, NewDateUpper, Vaccine, TimeLower, TimeUpper)
 
             return 'Your appointments for your 2 (two) doses are scheduled!'
 
@@ -77,7 +78,7 @@ class VaccineReservationScheduler:
         # Setting inventory to zero
         if DateUpper == '99-99-9999':
             DateUpper = Date
-        self.sqltext = "SELECT TOP 1 CaregiverSlotSchedulingId FROM CareGiverSchedule WHERE SlotStatus=0 AND WorkDay>= %s AND WorkDay <= %s AND SlotTime BETWEEN %s AND %s ORDER BY SlotTime ASC"
+        self.sqltext = "SELECT TOP 1 CaregiverSlotSchedulingId FROM CareGiverSchedule WHERE SlotStatus=0 AND WorkDay>= %s AND WorkDay <= %s AND SlotTime BETWEEN %s AND %s ORDER BY WorkDay, SlotTime ASC"
         try:
             read_cursor.execute(self.sqltext, ((Date), (DateUpper), (TimeLower), (TimeUpper)))
             rows = read_cursor.fetchone()
@@ -132,7 +133,6 @@ class VaccineReservationScheduler:
             read_cursor.execute(self.getVAStatus, (str(vaccineappointmentid)))
             row = read_cursor.fetchone()
             vastatus = row['SlotStatus']
-            print(cgstatus, vastatus)
             # Check to make sure statuses are in correct position
             if cgstatus == 1 and vastatus == 1:
                 action_cursor.execute(self.updateCaregiverSchedule, (str(slotid)))
@@ -176,14 +176,16 @@ if __name__ == '__main__':
             # Ass patients
             # Schedule the patients
             #covid.AddDoses(dbcursor, 'Moderna', 30)
-            patientid = 1
-            slotid = vrs.PutHoldOnAppointmentSlot(read_cursor, action_cursor, '12-12-2021')
-            vaccinepatient = patient()
-            vaccineappointmentid = vaccinepatient.ReserveAppointment(slotid, 'Pfizer', patientid, read_cursor, action_cursor)
-            print(slotid)
-            print(vaccineappointmentid)
-            slotid = vrs.ScheduleAppointmentSlot(vaccineappointmentid, slotid, read_cursor, action_cursor)
-            patient.ScheduleAppointment(read_cursor, action_cursor, slotid, vaccineappointmentid)
+            # patientid = 1
+            # slotid = vrs.PutHoldOnAppointmentSlot(read_cursor, action_cursor, '12-12-2021')
+            # vaccinepatient = patient()
+            # vaccineappointmentid = vaccinepatient.ReserveAppointment(slotid, 'Pfizer', patientid, read_cursor, action_cursor)
+            # print(slotid)
+            # print(vaccineappointmentid)
+            # slotid = vrs.ScheduleAppointmentSlot(vaccineappointmentid, slotid, read_cursor, action_cursor)
+            # patient.ScheduleAppointment(read_cursor, action_cursor, slotid, vaccineappointmentid)
+            #FullScheduler(self, read_cursor, action_cursor, PatientId, Date, DateUpper='99-99-9999', Vaccine='Pfizer', TimeLower='00:00:00', TimeUpper='23:59:59'):
+            #vrs.FullScheduler(read_cursor, action_cursor, 1, '12-12-2021', '12-12-2022', 'Pfizer', '10:00:00', '14:00:00')
             # Test cases done!
             #covid.ReserveDoses(dbcursor, 2)
             # clear_tables(sqlClient)
