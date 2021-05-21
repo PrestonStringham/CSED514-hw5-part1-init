@@ -1,28 +1,19 @@
-from VaccineReservationScheduler import VaccineReservationScheduler as scheduler
 from COVID19_vaccine import COVID19Vaccine as covid
 class VaccinePatient:
-	def __init__(self, cursor, patientid):
-		self.covid = covid()
-		self.patientid = patientid
-		self.getPatientInfo = "SELECT V.DosesPerPatient, VA.DoseNumber FROM Vaccines AS V, VaccineAppointments AS VA WHERE VA.VaccineAppointmentId=%s AND VA.VaccineName = V.VaccineName"
+	def __init__(self):
+		return None
 
-class VaccinePatient:
-	def __init__(self, cursor, patientid):
-		self.covid = covid()
-		self.patientid = patientid
-		self.getPatientInfo = "SELECT V.DosesPerPatient, VA.DoseNumber FROM Vaccines AS V, VaccineAppointments AS VA WHERE VA.VaccineAppointmentId=%s AND VA.VaccineName = V.VaccineName"
-
-	def ReserveAppointment(CaregiverSlotSchedulingId, Vaccine, PatientId, cursor):
+	def ReserveAppointment(self, CaregiverSlotSchedulingId, Vaccine, PatientId, read_cursor, action_cursor):
 		'''
 		Check if slot is on hold.
 		Create a vaccine appointment.
 		Update status of Patient. 
 		'''
 		# From CareGiverSchedule
-		self.getScheduleInfo('SELECT SlotStatus, CaregiverId, WorkDay, SlotTime, SlotHour, SlotMinute FROM CareGiverSchedule WHERE CaregiverSlotSchedulingId=%s')
-		cursor.execute(self.getScheduleInfo, CaregiverSlotSchedulingId)
-		row = cursor.fetchone()
-		slot_id = row['SlotStaus']
+		getScheduleInfo = 'SELECT SlotStatus, CaregiverId, WorkDay, SlotTime, SlotHour, SlotMinute FROM CareGiverSchedule WHERE CaregiverSlotSchedulingId=%s'
+		read_cursor.execute(getScheduleInfo, CaregiverSlotSchedulingId)
+		row = read_cursor.fetchone()
+		slot_id = row['SlotStatus']
 		
 		# Check if appointment is OnHold, 1
 		if slot_id != 1:
@@ -35,11 +26,14 @@ class VaccinePatient:
 		slotminute = row['SlotMinute']
 
 		# from Patient
-		self.getPatientInfo('SELECT * FROM Patients WHERE PatientId=%s')
-		cursor.execute(self.getPatientInfo, PatientId)
-		row_patient = cursor.fetchone()
+		getPatientInfo = 'SELECT * FROM Patients WHERE PatientId=%s'
+		read_cursor.execute(getPatientInfo, PatientId)
+		row_patient = read_cursor.fetchone()
 		vaccinestatus = row_patient['VaccineStatus']
 
+		if vaccinestatus == 7:
+			raise Exception('Patient is fully vaccinated.')
+		
 		if vaccinestatus >= 3: # check if 1s dose already administered
 			dose_number = 2
 			new_vaccinestatus = 4 # (4, 'Queued for 2nd Dose')
@@ -47,32 +41,46 @@ class VaccinePatient:
 			dose_number = 1
 			new_vaccinestatus = 1 # (1, 'Queued for 1st Dose');
 
-		# create vaccine appointment 
-		self.createVaccineAppointment = "INSERT INTO VaccineAppointments (VaccineName, PatientId,  CaregiverId, ReservationDate, ReservationStartHour, ReservationStartMinute, AppointmentDuration, DoseNumber) VALUES(%s, %s, %s, %s, %s, %s, %s, %s)"
-		cursor.execute(self.createVaccineAppointment, Vaccine, PatientId, caregiver_id, date, slothour, slotminute, 15, dose_number)
+		# check if vaccine appointment already exists
+		getVaccineAppointment = "SELECT VaccineAppointmentId FROM VaccineAppointments WHERE PatientId=%s AND CaregiverId=%s AND ReservationDate=%s AND DoseNumber=%s"
+		read_cursor.execute(getVaccineAppointment, ((PatientId), (caregiver_id), (date), (dose_number)))
+		row = read_cursor.fetchone()
+		if row is None:
+			# create vaccine appointment 
+			createVaccineAppointment = "INSERT INTO VaccineAppointments (VaccineName, PatientId,  CaregiverId, ReservationDate, ReservationStartHour, ReservationStartMinute, AppointmentDuration, DoseNumber, SlotStatus) VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s)"
+			action_cursor.execute(createVaccineAppointment, ((Vaccine), (PatientId), (caregiver_id), (date), (slothour), (slotminute), (15), (dose_number), (1)))
+		else:
+			raise Exception('Patient is already scheduled for this time slot.')
 
 		# change status of patient
-		self.updatePatients = "UPDATE Patients SET VaccineStatus=%s WHERE PatientId=%s"
-		cursor.execute(self.updatePatients, new_vaccinestatus, PatientId )
+		updatePatients = "UPDATE Patients SET VaccineStatus=%s WHERE PatientId=%s"
+		action_cursor.execute(updatePatients, ((new_vaccinestatus), (PatientId)))
 
 		# return vaccineAppointmentId
-		self.getVaccineAppointment = "SELECT VaccineAppointmentId FROM VaccineAppointments WHERE PatientId=%s AND CaregiverId=%s AND ReservationDate=%s AND DoseNumber=%s) VALUES(%s, %s, %s, %s)"
-		cursor.execute(self.getVaccineAppointment, PatientId, caregiver_id, date, dose_number)
-		row_appointment = cursor.fetchone()
-		appointment_id = row_patient['VaccineAppointmentId']
-
+		getVaccineAppointment = "SELECT VaccineAppointmentId FROM VaccineAppointments WHERE PatientId=%s AND CaregiverId=%s AND ReservationDate=%s AND DoseNumber=%s"
+		read_cursor.execute(getVaccineAppointment, ((PatientId), (caregiver_id), (date), (dose_number)))
+		row_appointment = read_cursor.fetchone()
+		appointment_id = row_appointment['VaccineAppointmentId']
 		return appointment_id
 
-	def ScheduleAppointment(cursor, slotid):
-		self.getPatientInfo = "SELECT V.DosesPerPatient AS DosesPerPatient, VA.DoseNumber AS DoseNumber FROM Vaccines AS V, VaccineAppointments AS VA WHERE VA.VaccineAppointmentId=%s AND VA.VaccineName = V.VaccineName"
-		cursor.execute(self.getPatientInfo)
-		row = cursor.fetchone()
-		dose_number = row['DoseNumber']
-		doses_per_patient = row['DosesPerPatient']
-		if does_number > doses_per_patient:
-			raise Exception('Patient dose number exceeds maxiumum number of doses per patient for this vaccine.')
-		if dose_number = 1:
-			covid.ReserveDoses(slotid)
-		scheduler.ScheduleAppointmentSlot(slotid, cursor)
-		print('Appointment successfully scheduled.')
-		return None
+	def ScheduleAppointment(read_cursor, action_cursor, slotid, vaccineappointmentid):
+		'''
+		Insert vaccineappointmentid into caregiver schedule
+		Reserve doses
+		Update patient status code
+		'''
+		updateCGS = "UPDATE CareGiverSchedule SET VaccineAppointmentId=%s WHERE CaregiverSlotSchedulingId=%s"
+		getPatientId = "SELECT PatientId FROM VaccineAppointments WHERE VaccineAppointmentId=%s"
+		updatePatientStatus = "UPDATE Patients SET VaccineStatus=VaccineStatus+1 WHERE PatientId=%s"
+		try:
+			action_cursor.execute(updateCGS, ((vaccineappointmentid), (slotid)))
+			read_cursor.execute(getPatientId, (vaccineappointmentid))
+			row = read_cursor.fetchone()
+			patientid = row['PatientId']
+			print('patientid: ', patientid)
+			action_cursor.execute(updatePatientStatus, (patientid))
+			covid.ReserveDoses(read_cursor, action_cursor, vaccineappointmentid)
+			print('Patient successfully scheduled.')
+		except:
+			action_cursor.connection.rollback()
+			raise Exception('Could not schedule appointment.')
