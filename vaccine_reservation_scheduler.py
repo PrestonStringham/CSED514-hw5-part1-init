@@ -16,16 +16,70 @@ class VaccineReservationScheduler:
 
     def __init__(self):
         return
+    
+    def ScheduleProcess (self, read_cursor, action_cursor, PatientId, Date, DateUpper='99-99-9999', Vaccine='Pfizer', TimeLower='00:00:00', TimeUpper='23:59:59'):
+        '''
+        Full process for scheduling a vaccine appointment. 
+        '''
+        # put hold on slot of Caregiver Scheduler  
+        slotid = self.PutHoldOnAppointmentSlot(self, read_cursor, action_cursor, Date, DateUpper, TimeLower, TimeUpper) 
+        #check for invalid output 0, -1 or -2  
+        if slotid <= 0:
+            raise Exception('Error finding slot in Caregiver Schedule'.)
+        
+        # creates vaccine appointment
+        vaccineappointmentid = patient.ReserveAppointment(self, first_slotid, Vaccine, PatientId, read_cursor, action_cursor)
+        
+        # change status to scheduled
+        scheduleslot = self.ScheduleAppointmentSlot(vaccineappointmentid, slotid, read_cursor, action_cursor)
+        # check for invalid -1 or -2
+        if scheduleslot <= 0:
+            raise Exception('Error scheduling slot in Caregiver Schedule.')
+        
+        # update tables in database post scheduling
+        patient.ScheduleAppointment(read_cursor, action_cursor, slotid, vaccineappointmentid)
+        return None
 
-    def PutHoldOnAppointmentSlot(self, read_cursor, action_cursor, Date, TimeLower='00:00:00', TimeUpper='23:59:59'):
+    def FullScheduler(self, read_cursor, action_cursor, PatientId, Date, DateUpper='99-99-9999', Vaccine='Pfizer', TimeLower='00:00:00', TimeUpper='23:59:59'):
+        '''
+        Reserves appointment(s) for patient.
+        '''
+        # schedule first appointment
+        self.ScheduleProcess (self, read_cursor, action_cursor, PatientId, Date, DateUpper, Vaccine, TimeLower, TimeUpper)
+        
+        # get vaccine number of doses and TimeBetweenLower/TimeBetweenUpper
+        getVaccineInfo= 'SELECT * FROM Vaccines WHERE VaccineName=%s'
+        read_cursor.execute(getVaccineInfo, Vaccine)
+		row = read_cursor.fetchone()
+		number_doses = row['DosesPerPatient']
+        BetweenLower = row['DaysBetweenDosesLower']
+        BetweenUpper = row['DaysBetweenDosesUpper']
+
+        # check if needs 2nd appointment
+        if number_doses == 2:
+            NewDate = (datetime.datetime.strptime(Date, '%m-%d-%Y') + datetime.timedelta(days=BetweenLower)).strftime('%m-%d-%Y')
+            NewDateUpper = datetime.datetime.strptime(Date, '%m-%d-%Y') + datetime.timedelta(days=BetweenUpper).strftime('%m-%d-%Y')
+            self.ScheduleProcess (self, read_cursor, action_cursor, PatientId, NewDate, NewDateUpper, Vaccine, TimeLower, TimeUpper)
+
+            return 'Your appointments for your 2 (two) doses are scheduled!'
+
+        return 'Your appointment is scheduled!' 
+
+        
+
+
+
+    def PutHoldOnAppointmentSlot(self, read_cursor, action_cursor, Date, DateUpper='99-99-9999', TimeLower='00:00:00', TimeUpper='23:59:59'):
         ''' Method that reserves a CareGiver appointment slot &
         returns the unique scheduling slotid
         Should return 0 if no slot is available  or -1 if there is a database error'''
         # Note to students: this is a stub that needs to replaced with your code
         # Setting inventory to zero
-        self.sqltext = "SELECT TOP 1 CaregiverSlotSchedulingId FROM CareGiverSchedule WHERE SlotStatus=0 AND WorkDay=%s AND SlotTime BETWEEN %s AND %s ORDER BY SlotTime ASC"
+        if DateUpper == '99-99-9999':
+            DateUpper = Date
+        self.sqltext = "SELECT TOP 1 CaregiverSlotSchedulingId FROM CareGiverSchedule WHERE SlotStatus=0 AND WorkDay>= %s AND WorkDay <= %s AND SlotTime BETWEEN %s AND %s ORDER BY SlotTime ASC"
         try:
-            read_cursor.execute(self.sqltext, ((Date), (TimeLower), (TimeUpper)))
+            read_cursor.execute(self.sqltext, ((Date), (DateUpper), (TimeLower), (TimeUpper)))
             rows = read_cursor.fetchone()
             # No appointments available
             if rows is None:
@@ -133,3 +187,6 @@ if __name__ == '__main__':
             # Test cases done!
             #covid.ReserveDoses(dbcursor, 2)
             # clear_tables(sqlClient)
+
+
+#Call it 2x here
